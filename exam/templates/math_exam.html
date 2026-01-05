@@ -1,14 +1,31 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Mathematics Entrance Exam</title>
+<title>English Entrance Exam</title>
+
+<style>
+#timerBox{
+    font-size: 22px;
+    color: red;
+    font-weight: bold;
+    position: fixed;
+    right: 20px;
+    top: 10px;
+}
+</style>
+
 </head>
+
 <body>
 
-<h1>College Entrance Examination</h1>
-<h2>Mathematics</h2>
+<div id="timerBox">
+⏳ Time Remaining: <span id="timeDisplay"></span>
+</div>
 
-<form method="POST">
+<h1>College Entrance Examination</h1>
+<h2>English Grammar & Logic</h2>
+
+<form method="POST" id="examForm">
 {% csrf_token %}
 
 <label><b>Student Name:</b></label><br>
@@ -21,13 +38,61 @@
     <h3>{{ no }}. {{ q.q }}</h3>
 
     {% for key, value in q.options.items %}
-        <input type="radio" name="{{ no }}" value="{{ key }}"> {{ key }}) {{ value }}<br>
+        <input type="radio" name="{{ no }}" value="{{ key }}" required>
+        {{ key }}) {{ value }}<br>
     {% endfor %}
 {% endfor %}
 
 <br>
-<button type="submit">SUBMIT EXAM</button>
+<button type="submit" id="submitBtn">SUBMIT EXAM</button>
 </form>
+
+
+<!-- ================= TIMER SCRIPT ================= -->
+<script>
+// Set exam time (minutes * 60)
+let timeLeft = 90 * 60;   // 90 minutes
+const display = document.getElementById("timeDisplay");
+const form = document.getElementById("examForm");
+const submitBtn = document.getElementById("submitBtn");
+
+// Format time
+function format(seconds){
+    let m = Math.floor(seconds / 60);
+    let s = seconds % 60;
+    return m + ":" + (s < 10 ? "0" + s : s);
+}
+
+display.innerHTML = format(timeLeft);
+
+// Countdown
+let countdown = setInterval(() => {
+    timeLeft--;
+    display.innerHTML = format(timeLeft);
+
+    if(timeLeft <= 0){
+        clearInterval(countdown);
+        alert("Time is up! Your exam is being submitted.");
+        submitBtn.disabled = true;
+        form.submit();
+    }
+}, 1000);
+
+
+// ================= Prevent Multiple Submissions =================
+let submitted = false;
+
+form.addEventListener("submit", function(){
+    if(submitted){
+        alert("Exam already submitted. Please wait...");
+        return false;
+    }
+
+    submitted = true;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = "Submitting...";
+});
+</script>
 
 </body>
 </html>

@@ -1,5 +1,6 @@
 from django.shortcuts import render
 from .models import ExamResult
+from django.core.mail import send_mail
 
 
 # ===================== SUBJECT SELECTION =====================
@@ -195,6 +196,51 @@ def home(request):
             status=status,
             subject="English"
         )
+# ===== EMAIL ADMIN =====
+admin_message = f"""
+NEW CIU ENTRANCE EXAM SUBMISSION
+
+Name: {student_name}
+Email: {student_email}
+Subject: {subject}
+Score: {score} / {total}
+Percentage: {percent}%
+Status: {status}
+"""
+
+send_mail(
+    subject="New CIU Entrance Exam Submission",
+    message=admin_message,
+    from_email=None,
+    recipient_list=["admin_email@ciu.com"],   # CHANGE TO CIU ADMIN EMAIL
+    fail_silently=True
+)
+
+# ===== EMAIL STUDENT RESULT =====
+student_message = f"""
+Dear {student_name},
+
+Thank you for taking the CIU Entrance Examination.
+
+Subject: {subject}
+Score: {score}/{total}
+Percentage: {percent}%
+Result: {status}
+
+You will be contacted by CIU shortly.
+
+Best Regards,
+CEPRES International University
+Entrance Examination Board
+"""
+
+send_mail(
+    subject="Your CIU Entrance Exam Result",
+    message=student_message,
+    from_email=None,
+    recipient_list=[student_email],
+    fail_silently=True
+)
 
         return render(request, "result.html", {
             "score": score,
@@ -330,6 +376,52 @@ def math_exam(request):
             status=status,
             subject="Mathematics"
         )
+
+# ===== EMAIL ADMIN =====
+admin_message = f"""
+NEW CIU ENTRANCE EXAM SUBMISSION
+
+Name: {student_name}
+Email: {student_email}
+Subject: {subject}
+Score: {score} / {total}
+Percentage: {percent}%
+Status: {status}
+"""
+
+send_mail(
+    subject="New CIU Entrance Exam Submission",
+    message=admin_message,
+    from_email=None,
+    recipient_list=["admin_email@ciu.com"],   # CHANGE TO CIU ADMIN EMAIL
+    fail_silently=True
+)
+
+# ===== EMAIL STUDENT RESULT =====
+student_message = f"""
+Dear {student_name},
+
+Thank you for taking the CIU Entrance Examination.
+
+Subject: {subject}
+Score: {score}/{total}
+Percentage: {percent}%
+Result: {status}
+
+You will be contacted by CIU shortly.
+
+Best Regards,
+CEPRES International University
+Entrance Examination Board
+"""
+
+send_mail(
+    subject="Your CIU Entrance Exam Result",
+    message=student_message,
+    from_email=None,
+    recipient_list=[student_email],
+    fail_silently=True
+)
 
         return render(request, "result.html", {
             "score": score,

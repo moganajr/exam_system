@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Mathematics Entrance Exam</title>
+</head>
+<body>
+
+<h1>College Entrance Examination</h1>
+<h2>Mathematics</h2>
+
+<form method="POST">
+{% csrf_token %}
+
+<label><b>Student Name:</b></label><br>
+<input type="text" name="student_name" required><br><br>
+
+<label><b>Email:</b></label><br>
+<input type="email" name="student_email" required><br><br>
+
+{% for no, q in questions.items %}
+    <h3>{{ no }}. {{ q.q }}</h3>
+
+    {% for key, value in q.options.items %}
+        <input type="radio" name="{{ no }}" value="{{ key }}"> {{ key }}) {{ value }}<br>
+    {% endfor %}
+{% endfor %}
+
+<br>
+<button type="submit">SUBMIT EXAM</button>
+</form>
+
+</body>
+</html>

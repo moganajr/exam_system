@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Exam Result</title>
+</head>
+
+<body>
+
+<h1>Exam Completed</h1>
+
+<h2>Your Score: {{ score }} / {{ total }}</h2>
+<h2>Percentage: {{ percent }}%</h2>
+
+{% if percent >= 50 %}
+<h2 style="color:green;">PASSED</h2>
+{% else %}
+<h2 style="color:red;">FAILED</h2>
+{% endif %}
+
+<br>
+<a href="/">Take Exam Again</a>
+
+</body>
+</html>

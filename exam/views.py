@@ -186,6 +186,7 @@ def home(request):
 
         percent = round((score / total) * 100)
         status = "PASS" if percent >= 50 else "FAIL"
+        subject = "English"
 
         ExamResult.objects.create(
             student_name=student_name,
@@ -194,10 +195,11 @@ def home(request):
             total=total,
             percentage=percent,
             status=status,
-            subject="English"
+            subject=subject
         )
-# ===== EMAIL ADMIN =====
-admin_message = f"""
+
+        # ===== EMAIL ADMIN =====
+        admin_message = f"""
 NEW CIU ENTRANCE EXAM SUBMISSION
 
 Name: {student_name}
@@ -207,17 +209,16 @@ Score: {score} / {total}
 Percentage: {percent}%
 Status: {status}
 """
+        send_mail(
+            subject="New CIU Entrance Exam Submission",
+            message=admin_message,
+            from_email=None,
+            recipient_list=["admin_email@ciu.com"],   # change
+            fail_silently=True,
+        )
 
-send_mail(
-    subject="New CIU Entrance Exam Submission",
-    message=admin_message,
-    from_email=None,
-    recipient_list=["admin_email@ciu.com"],   # CHANGE TO CIU ADMIN EMAIL
-    fail_silently=True
-)
-
-# ===== EMAIL STUDENT RESULT =====
-student_message = f"""
+        # ===== EMAIL STUDENT RESULT =====
+        student_message = f"""
 Dear {student_name},
 
 Thank you for taking the CIU Entrance Examination.
@@ -233,14 +234,13 @@ Best Regards,
 CEPRES International University
 Entrance Examination Board
 """
-
-send_mail(
-    subject="Your CIU Entrance Exam Result",
-    message=student_message,
-    from_email=None,
-    recipient_list=[student_email],
-    fail_silently=True
-)
+        send_mail(
+            subject="Your CIU Entrance Exam Result",
+            message=student_message,
+            from_email=None,
+            recipient_list=[student_email],
+            fail_silently=True,
+        )
 
         return render(request, "result.html", {
             "score": score,
@@ -350,7 +350,9 @@ math_questions = {
 }
 
 
-# ===================== MATH VIEW =====================
+# ================= MATH EXAM =================
+# Ensure your math_questions dictionary exists in this file
+
 def math_exam(request):
     if request.method == "POST":
         score = 0
@@ -366,70 +368,29 @@ def math_exam(request):
 
         percent = round((score / total) * 100)
         status = "PASS" if percent >= 50 else "FAIL"
+        subject = "Mathematics"
 
         ExamResult.objects.create(
             student_name=student_name,
             student_email=student_email,
+            subject=subject,
             score=score,
             total=total,
             percentage=percent,
-            status=status,
-            subject="Mathematics"
+            status=status
         )
 
-# ===== EMAIL ADMIN =====
-admin_message = f"""
-NEW CIU ENTRANCE EXAM SUBMISSION
-
-Name: {student_name}
-Email: {student_email}
-Subject: {subject}
-Score: {score} / {total}
-Percentage: {percent}%
-Status: {status}
-"""
-
-send_mail(
-    subject="New CIU Entrance Exam Submission",
-    message=admin_message,
-    from_email=None,
-    recipient_list=["admin_email@ciu.com"],   # CHANGE TO CIU ADMIN EMAIL
-    fail_silently=True
-)
-
-# ===== EMAIL STUDENT RESULT =====
-student_message = f"""
-Dear {student_name},
-
-Thank you for taking the CIU Entrance Examination.
-
-Subject: {subject}
-Score: {score}/{total}
-Percentage: {percent}%
-Result: {status}
-
-You will be contacted by CIU shortly.
-
-Best Regards,
-CEPRES International University
-Entrance Examination Board
-"""
-
-send_mail(
-    subject="Your CIU Entrance Exam Result",
-    message=student_message,
-    from_email=None,
-    recipient_list=[student_email],
-    fail_silently=True
-)
-
-        return render(request, "result.html", {
-            "score": score,
-            "total": total,
-            "percent": percent,
-            "name": student_name,
-            "email": student_email,
-            "status": status
-        })
+        return render(
+            request,
+            "result.html",
+            {
+                "score": score,
+                "total": total,
+                "percent": percent,
+                "name": student_name,
+                "email": student_email,
+                "status": status
+            },
+        )
 
     return render(request, "math_exam.html", {"math_questions": math_questions})

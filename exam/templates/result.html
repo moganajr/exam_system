@@ -1,27 +1,22 @@
 {% extends "base.html" %}
 {% block content %}
 
-<!DOCTYPE html>
-<html>
-<head>
-<title>Exam Result</title>
-</head>
+<h2>Exam Result</h2>
 
-<body>
+<p><b>Candidate:</b> {{ name }}</p>
+<p><b>Email:</b> {{ email }}</p>
 
-<h1>Exam Completed</h1>
+<h3>Your Score</h3>
+<p><b>{{ score }}</b> / {{ total }} ({{ percent }}%)</p>
 
-<h2>Your Score: {{ score }} / {{ total }}</h2>
-<h2>Percentage: {{ percent }}%</h2>
-
-{% if percent >= 50 %}
-<h2 style="color:green;">PASSED</h2>
+<h3>Status:
+{% if status == "PASS" %}
+    <span style="color:green;">PASS</span>
 {% else %}
-<h2 style="color:red;">FAILED</h2>
+    <span style="color:red;">FAIL</span>
 {% endif %}
+</h3>
 
-<br>
-<a href="/">Take Exam Again</a>
+<a href="/">Return Home</a>
 
-</body>
-</html>
+{% endblock %}

@@ -1,21 +1,18 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>CIU Entrance Exam</title>
-</head>
-<body>
-<center>
-    <h1>Welcome to CIU Entrance Exam</h1>
-    <h3>Please Select Your Exam</h3>
+{% extends "base.html" %}
+{% block content %}
 
-    <a href="/english/">
-        <button style="padding:10px; font-size:18px;">English Entrance Exam</button>
-    </a>
-    <br><br>
+<h2>Select Examination</h2>
 
-    <a href="/math/">
-        <button style="padding:10px; font-size:18px;">Mathematics Entrance Exam</button>
-    </a>
-</center>
-</body>
-</html>
+<p>Please choose the examination you want to take</p>
+
+<a href="/english/">
+<button>English Grammar & Logic Exam</button>
+</a>
+
+<br><br>
+
+<a href="/math/">
+<button>Mathematics Entrance Exam</button>
+</a>
+
+{% endblock %}

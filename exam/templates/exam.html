@@ -1,29 +1,17 @@
-<!DOCTYPE html>
-<html>
-<head>
-<title>English Entrance Exam</title>
+{% extends "base.html" %}
+{% block content %}
 
-<style>
-#timerBox{
-    font-size: 22px;
-    color: red;
-    font-weight: bold;
-    position: fixed;
-    right: 20px;
-    top: 10px;
-}
-</style>
+<!-- ===== STUDENT NAME BANNER ===== -->
+<div id="studentBanner"
+     style="background:#C9A227;padding:10px;color:black;font-weight:bold;display:none;">
+</div>
 
-</head>
-
-<body>
-
-<div id="timerBox">
+<!-- ===== TIMER ===== -->
+<div id="timerBox" style="font-size:18px;color:red;font-weight:bold;text-align:right;">
 ⏳ Time Remaining: <span id="timeDisplay"></span>
 </div>
 
-<h1>College Entrance Examination</h1>
-<h2>English Grammar & Logic</h2>
+<h2>English Grammar & Logic Examination</h2>
 
 <form method="POST" id="examForm">
 {% csrf_token %}
@@ -44,19 +32,18 @@
 {% endfor %}
 
 <br>
-<button type="submit" id="submitBtn">SUBMIT EXAM</button>
+<button type="submit" id="submitBtn">Submit Exam</button>
 </form>
 
 
 <!-- ================= TIMER SCRIPT ================= -->
 <script>
-// Set exam time (minutes * 60)
+// ===== 90 MINUTE TIMER =====
 let timeLeft = 90 * 60;   // 90 minutes
 const display = document.getElementById("timeDisplay");
 const form = document.getElementById("examForm");
 const submitBtn = document.getElementById("submitBtn");
 
-// Format time
 function format(seconds){
     let m = Math.floor(seconds / 60);
     let s = seconds % 60;
@@ -65,7 +52,6 @@ function format(seconds){
 
 display.innerHTML = format(timeLeft);
 
-// Countdown
 let countdown = setInterval(() => {
     timeLeft--;
     display.innerHTML = format(timeLeft);
@@ -79,7 +65,18 @@ let countdown = setInterval(() => {
 }, 1000);
 
 
-// ================= Prevent Multiple Submissions =================
+// ===== SHOW STUDENT NAME AT TOP =====
+function showName(){
+  let name = document.querySelector("input[name='student_name']").value;
+  if(name){
+      document.getElementById("studentBanner").style.display="block";
+      document.getElementById("studentBanner").innerHTML = "Candidate: " + name;
+  }
+}
+document.querySelector("input[name='student_name']").addEventListener("keyup", showName);
+
+
+// ===== PREVENT MULTIPLE SUBMISSIONS =====
 let submitted = false;
 
 form.addEventListener("submit", function(){
@@ -87,12 +84,10 @@ form.addEventListener("submit", function(){
         alert("Exam already submitted. Please wait...");
         return false;
     }
-
     submitted = true;
     submitBtn.disabled = true;
     submitBtn.innerHTML = "Submitting...";
 });
 </script>
 
-</body>
-</html>
+{% endblock %}

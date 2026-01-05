@@ -184,13 +184,16 @@ def home(request):
         student_email = request.POST.get("student_email")
 
         percent = round((score / total) * 100)
+        status = "PASS" if percent >= 50 else "FAIL"
 
         ExamResult.objects.create(
             student_name=student_name,
             student_email=student_email,
             score=score,
             total=total,
-            percentage=percent
+            percentage=percent,
+            status=status,
+            subject="English"
         )
 
         return render(request, "result.html", {
@@ -198,7 +201,8 @@ def home(request):
             "total": total,
             "percent": percent,
             "name": student_name,
-            "email": student_email
+            "email": student_email,
+            "status": status
         })
 
     return render(request, "exam.html", {"questions": questions})
@@ -315,13 +319,16 @@ def math_exam(request):
         student_email = request.POST.get("student_email")
 
         percent = round((score / total) * 100)
+        status = "PASS" if percent >= 50 else "FAIL"
 
         ExamResult.objects.create(
             student_name=student_name,
             student_email=student_email,
             score=score,
             total=total,
-            percentage=percent
+            percentage=percent,
+            status=status,
+            subject="Mathematics"
         )
 
         return render(request, "result.html", {
@@ -329,7 +336,8 @@ def math_exam(request):
             "total": total,
             "percent": percent,
             "name": student_name,
-            "email": student_email
+            "email": student_email,
+            "status": status
         })
 
-    return render(request, "math_exam.html", {"questions": math_questions})
+    return render(request, "math_exam.html", {"math_questions": math_questions})

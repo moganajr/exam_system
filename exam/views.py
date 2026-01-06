@@ -206,24 +206,24 @@ questions = {
 
 # ===================== ENGLISH VIEW =====================
 import random
-from django.shortcuts import render
+from django.shortcuts import render, redirect
+from django.http import HttpResponse
 from .models import EnglishQuestion, ExamResult
 from django.core.mail import EmailMessage
 from reportlab.pdfgen import canvas
 from io import BytesIO
 
+
 def english_exam(request):
 
+    # ================= PAYMENT SECURITY CHECK =================
     if "verified_email" not in request.session:
         return redirect("verify_payment")
 
     if request.session.get("allowed_exam") not in ["ENGLISH", "BOTH"]:
         return HttpResponse("You are not cleared for English Exam")
 
-
-def english_exam(request):
-
-    # PREVENT MULTIPLE ATTEMPTS
+    # ================= PREVENT MULTIPLE ATTEMPTS =================
     if request.method == "GET" and request.GET.get("email"):
         if ExamResult.objects.filter(
             student_email=request.GET.get("email"),
@@ -231,6 +231,7 @@ def english_exam(request):
         ).exists():
             return render(request, "already_taken.html")
 
+    # ================= FORM SUBMISSION =================
     if request.method == "POST":
         score = 0
         total = 35
@@ -250,7 +251,8 @@ def english_exam(request):
         name = request.POST.get("student_name")
         email = request.POST.get("student_email")
 
-        result = ExamResult.objects.create(
+        # Save Result
+        ExamResult.objects.create(
             student_name=name,
             student_email=email,
             subject="English",
@@ -280,10 +282,16 @@ def english_exam(request):
             "CIU Entrance Exam Result",
             f"Dear {name},\n\nAttached is your CIU Exam Certificate.",
             "cepresiamacoe@gmail.com",
-            [email, "cepresiamacoe@gmail.com"]  # student + admin
+            [email, "cepresiamacoe@gmail.com"]
         )
+
         email_msg.attach("CIU_Result.pdf", pdf, "application/pdf")
-        email_msg.send(fail_silently=True)
+
+        # Prevent Render Crash
+        try:
+            email_msg.send(fail_silently=True)
+        except:
+            pass
 
         return render(request, "result.html", {
             "score": score,
@@ -294,12 +302,11 @@ def english_exam(request):
             "status": status
         })
 
-    # ================= SELECT RANDOM QUESTIONS =================
+    # ================= LOAD RANDOM QUESTIONS =================
     all_questions = list(EnglishQuestion.objects.all())
     random.shuffle(all_questions)
     selected = all_questions[:35]
 
-    # ================= SHUFFLE OPTIONS =================
     for q in selected:
         options = [
             ("A", q.option_a),
@@ -310,9 +317,7 @@ def english_exam(request):
         random.shuffle(options)
         q.shuffled = options
 
-    return render(request, "exam.html", {
-        "questions": selected
-    })
+    return render(request, "exam.html", {"questions": selected})
 
 # ===================== MATHEMATICS (YOUR 30 QUESTIONS) =====================
 math_questions = {
@@ -412,23 +417,24 @@ math_questions = {
 
 # ===================== MATHEMATICS VIEW =====================
 import random
-from django.shortcuts import render
+from django.shortcuts import render, redirect
+from django.http import HttpResponse
 from .models import MathQuestion, ExamResult
 from django.core.mail import EmailMessage
 from reportlab.pdfgen import canvas
 from io import BytesIO
 
+
 def math_exam(request):
 
+    # ================= PAYMENT SECURITY CHECK =================
     if "verified_email" not in request.session:
         return redirect("verify_payment")
 
     if request.session.get("allowed_exam") not in ["MATH", "BOTH"]:
         return HttpResponse("You are not cleared for Math Exam")
 
-def math_exam(request):
-
-    # PREVENT MULTIPLE ATTEMPTS
+    # ================= PREVENT MULTIPLE ATTEMPTS =================
     if request.method == "GET" and request.GET.get("email"):
         if ExamResult.objects.filter(
             student_email=request.GET.get("email"),
@@ -436,6 +442,7 @@ def math_exam(request):
         ).exists():
             return render(request, "already_taken.html")
 
+    # ================= FORM SUBMISSION =================
     if request.method == "POST":
         score = 0
         total = 30
@@ -455,7 +462,8 @@ def math_exam(request):
         name = request.POST.get("student_name")
         email = request.POST.get("student_email")
 
-        result = ExamResult.objects.create(
+        # Save result
+        ExamResult.objects.create(
             student_name=name,
             student_email=email,
             subject="Math",
@@ -491,7 +499,11 @@ def math_exam(request):
         )
 
         email_msg.attach("CIU_Math_Result.pdf", pdf, "application/pdf")
-        email_msg.send(fail_silently=True)
+
+        try:
+            email_msg.send(fail_silently=True)
+        except:
+            pass
 
         return render(request, "result.html", {
             "score": score,
@@ -521,4 +533,3 @@ def math_exam(request):
     return render(request, "math_exam.html", {
         "questions": selected
     })
-

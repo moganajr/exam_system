@@ -1,7 +1,42 @@
-from django.shortcuts import render
-from .models import ExamResult
 from django.core.mail import send_mail
+from django.shortcuts import render, redirect
+from django.http import HttpResponse
+from django.core.mail import EmailMessage
+from django.utils import timezone
 
+import random
+
+from .models import (
+    ExamResult,
+    EnglishQuestion,
+    MathQuestion,
+    PaymentClearance,
+)
+
+
+def verify_payment(request):
+    if request.method == "POST":
+        email = request.POST.get("email")
+        code = request.POST.get("code")
+
+        try:
+            payment = PaymentClearance.objects.get(student_email=email, code=code)
+        except PaymentClearance.DoesNotExist:
+            return render(request, "payment_failed.html", {"error": "Invalid payment code"})
+
+        if payment.is_used:
+            return render(request, "payment_failed.html", {"error": "Code has already been used"})
+
+        payment.is_used = True
+        payment.used_at = timezone.now()
+        payment.save()
+
+        request.session["verified_email"] = email
+        request.session["allowed_exam"] = payment.exam_type
+
+        return redirect("select_exam")
+
+    return render(request, "verify_payment.html")
 
 # ===================== SUBJECT SELECTION =====================
 def select_exam(request):
@@ -169,90 +204,115 @@ questions = {
          "answer": "C"},
 }
 
-
 # ===================== ENGLISH VIEW =====================
-def home(request):
+import random
+from django.shortcuts import render
+from .models import EnglishQuestion, ExamResult
+from django.core.mail import EmailMessage
+from reportlab.pdfgen import canvas
+from io import BytesIO
+
+def english_exam(request):
+
+    if "verified_email" not in request.session:
+        return redirect("verify_payment")
+
+    if request.session.get("allowed_exam") not in ["ENGLISH", "BOTH"]:
+        return HttpResponse("You are not cleared for English Exam")
+
+
+def english_exam(request):
+
+    # PREVENT MULTIPLE ATTEMPTS
+    if request.method == "GET" and request.GET.get("email"):
+        if ExamResult.objects.filter(
+            student_email=request.GET.get("email"),
+            subject="English"
+        ).exists():
+            return render(request, "already_taken.html")
+
     if request.method == "POST":
         score = 0
-        total = len(questions)
+        total = 35
 
-        for qno, qdata in questions.items():
-            selected = request.POST.get(str(qno))
-            if selected == qdata["answer"]:
+        questions = EnglishQuestion.objects.filter(
+            id__in=request.POST.getlist("question_ids")
+        )
+
+        for q in questions:
+            selected = request.POST.get(str(q.id))
+            if selected == q.answer:
                 score += 1
-
-        student_name = request.POST.get("student_name")
-        student_email = request.POST.get("student_email")
 
         percent = round((score / total) * 100)
         status = "PASS" if percent >= 50 else "FAIL"
-        subject = "English"
 
-        ExamResult.objects.create(
-            student_name=student_name,
-            student_email=student_email,
+        name = request.POST.get("student_name")
+        email = request.POST.get("student_email")
+
+        result = ExamResult.objects.create(
+            student_name=name,
+            student_email=email,
+            subject="English",
             score=score,
             total=total,
             percentage=percent,
-            status=status,
-            subject=subject
+            status=status
         )
 
-        # ===== EMAIL ADMIN =====
-        admin_message = f"""
-NEW CIU ENTRANCE EXAM SUBMISSION
+        # ================= PDF CERTIFICATE =================
+        buffer = BytesIO()
+        p = canvas.Canvas(buffer)
+        p.drawString(200, 800, "CEPRES International University")
+        p.drawString(200, 780, "Entrance Exam Certificate")
+        p.drawString(100, 740, f"Student: {name}")
+        p.drawString(100, 720, f"Email: {email}")
+        p.drawString(100, 700, f"Subject: English")
+        p.drawString(100, 680, f"Score: {score}/{total} ({percent}%)")
+        p.drawString(100, 660, f"Status: {status}")
+        p.showPage()
+        p.save()
+        buffer.seek(0)
+        pdf = buffer.getvalue()
 
-Name: {student_name}
-Email: {student_email}
-Subject: {subject}
-Score: {score} / {total}
-Percentage: {percent}%
-Status: {status}
-"""
-        send_mail(
-            subject="New CIU Entrance Exam Submission",
-            message=admin_message,
-            from_email=None,
-            recipient_list=["admin_email@ciu.com"],   # change
-            fail_silently=True,
+        # ================= EMAIL RESULT =================
+        email_msg = EmailMessage(
+            "CIU Entrance Exam Result",
+            f"Dear {name},\n\nAttached is your CIU Exam Certificate.",
+            "cepresiamacoe@gmail.com",
+            [email, "cepresiamacoe@gmail.com"]  # student + admin
         )
-
-        # ===== EMAIL STUDENT RESULT =====
-        student_message = f"""
-Dear {student_name},
-
-Thank you for taking the CIU Entrance Examination.
-
-Subject: {subject}
-Score: {score}/{total}
-Percentage: {percent}%
-Result: {status}
-
-You will be contacted by CIU shortly.
-
-Best Regards,
-CEPRES International University
-Entrance Examination Board
-"""
-        send_mail(
-            subject="Your CIU Entrance Exam Result",
-            message=student_message,
-            from_email=None,
-            recipient_list=[student_email],
-            fail_silently=True,
-        )
+        email_msg.attach("CIU_Result.pdf", pdf, "application/pdf")
+        email_msg.send()
 
         return render(request, "result.html", {
             "score": score,
             "total": total,
             "percent": percent,
-            "name": student_name,
-            "email": student_email,
+            "name": name,
+            "email": email,
             "status": status
         })
 
-    return render(request, "exam.html", {"questions": questions})
+    # ================= SELECT RANDOM QUESTIONS =================
+    all_questions = list(EnglishQuestion.objects.all())
+    random.shuffle(all_questions)
+    selected = all_questions[:35]
 
+    # ================= SHUFFLE OPTIONS =================
+    for q in selected:
+        options = [
+            ("A", q.option_a),
+            ("B", q.option_b),
+            ("C", q.option_c),
+            ("D", q.option_d),
+        ]
+        random.shuffle(options)
+        q.shuffled = options
+
+    return render(request, "exam.html", {
+        "questions": selected
+    })
 
 # ===================== MATHEMATICS (YOUR 30 QUESTIONS) =====================
 math_questions = {
@@ -350,47 +410,115 @@ math_questions = {
 }
 
 
-# ================= MATH EXAM =================
-# Ensure your math_questions dictionary exists in this file
+# ===================== MATHEMATICS VIEW =====================
+import random
+from django.shortcuts import render
+from .models import MathQuestion, ExamResult
+from django.core.mail import EmailMessage
+from reportlab.pdfgen import canvas
+from io import BytesIO
 
 def math_exam(request):
+
+    if "verified_email" not in request.session:
+        return redirect("verify_payment")
+
+    if request.session.get("allowed_exam") not in ["MATH", "BOTH"]:
+        return HttpResponse("You are not cleared for Math Exam")
+
+def math_exam(request):
+
+    # PREVENT MULTIPLE ATTEMPTS
+    if request.method == "GET" and request.GET.get("email"):
+        if ExamResult.objects.filter(
+            student_email=request.GET.get("email"),
+            subject="Math"
+        ).exists():
+            return render(request, "already_taken.html")
+
     if request.method == "POST":
         score = 0
-        total = len(math_questions)
+        total = 30
 
-        for qno, qdata in math_questions.items():
-            selected = request.POST.get(str(qno))
-            if selected == qdata["answer"]:
+        questions = MathQuestion.objects.filter(
+            id__in=request.POST.getlist("question_ids")
+        )
+
+        for q in questions:
+            selected = request.POST.get(str(q.id))
+            if selected == q.answer:
                 score += 1
-
-        student_name = request.POST.get("student_name")
-        student_email = request.POST.get("student_email")
 
         percent = round((score / total) * 100)
         status = "PASS" if percent >= 50 else "FAIL"
-        subject = "Mathematics"
 
-        ExamResult.objects.create(
-            student_name=student_name,
-            student_email=student_email,
-            subject=subject,
+        name = request.POST.get("student_name")
+        email = request.POST.get("student_email")
+
+        result = ExamResult.objects.create(
+            student_name=name,
+            student_email=email,
+            subject="Math",
             score=score,
             total=total,
             percentage=percent,
             status=status
         )
 
-        return render(
-            request,
-            "result.html",
-            {
-                "score": score,
-                "total": total,
-                "percent": percent,
-                "name": student_name,
-                "email": student_email,
-                "status": status
-            },
+        # ================= PDF CERTIFICATE =================
+        buffer = BytesIO()
+        p = canvas.Canvas(buffer)
+
+        p.drawString(200, 800, "CEPRES International University")
+        p.drawString(200, 780, "Entrance Exam Certificate")
+        p.drawString(100, 740, f"Student: {name}")
+        p.drawString(100, 720, f"Email: {email}")
+        p.drawString(100, 700, f"Subject: Mathematics")
+        p.drawString(100, 680, f"Score: {score}/{total} ({percent}%)")
+        p.drawString(100, 660, f"Status: {status}")
+
+        p.showPage()
+        p.save()
+        buffer.seek(0)
+        pdf = buffer.getvalue()
+
+        # ================= EMAIL RESULT =================
+        email_msg = EmailMessage(
+            "CIU Entrance Exam Result",
+            f"Dear {name},\n\nAttached is your CIU Exam Certificate.",
+            "cepresiamacoe@gmail.com",
+            [email, "cepresiamacoe@gmail.com"]
         )
 
-    return render(request, "math_exam.html", {"math_questions": math_questions})
+        email_msg.attach("CIU_Math_Result.pdf", pdf, "application/pdf")
+        email_msg.send()
+
+        return render(request, "result.html", {
+            "score": score,
+            "total": total,
+            "percent": percent,
+            "name": name,
+            "email": email,
+            "status": status
+        })
+
+    # ================= SELECT RANDOM QUESTIONS =================
+    questions = list(MathQuestion.objects.all())
+    random.shuffle(questions)
+    selected = questions[:30]
+
+    # ================= SHUFFLE OPTIONS =================
+    for q in selected:
+        options = [
+            ("A", q.option_a),
+            ("B", q.option_b),
+            ("C", q.option_c),
+            ("D", q.option_d),
+        ]
+        random.shuffle(options)
+        q.shuffled = options
+
+    return render(request, "math_exam.html", {
+        "questions": selected
+    })
+

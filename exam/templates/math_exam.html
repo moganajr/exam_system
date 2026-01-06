@@ -22,13 +22,16 @@
 <label><b>Email:</b></label><br>
 <input type="email" name="student_email" required><br><br>
 
-{% for no, q in math_questions.items %}
-    <h3>{{ no }}. {{ q.q }}</h3>
+<!-- ====== RANDOM SHUFFLED QUESTIONS ====== -->
+{% for q in questions %}
+<input type="hidden" name="question_ids" value="{{ q.id }}">
 
-    {% for key, value in q.options.items %}
-        <input type="radio" name="{{ no }}" value="{{ key }}" required>
-        {{ key }}) {{ value }}<br>
-    {% endfor %}
+<h3>{{ forloop.counter }}. {{ q.question }}</h3>
+
+{% for key,value in q.shuffled %}
+    <input type="radio" name="{{ q.id }}" value="{{ key }}" required>
+    {{ key }}) {{ value }} <br>
+{% endfor %}
 {% endfor %}
 
 <br>
@@ -36,14 +39,49 @@
 </form>
 
 
-<!-- ================= TIMER SCRIPT ================= -->
+<!-- =============================== -->
+<!-- ===== RESUME + TIMER JS ===== -->
+<!-- =============================== -->
 <script>
-// ===== 90 MINUTE TIMER =====
-let timeLeft = 90 * 60;   // 90 minutes
+// ================= SETTINGS =================
+const EXAM_KEY = window.location.pathname.includes("math")
+    ? "ciu_math_exam"
+    : "ciu_english_exam";
+
+
+// ================= LOAD SAVED DATA =================
+let savedData = JSON.parse(localStorage.getItem(EXAM_KEY)) || {};
+
+let timeLeft = savedData.timeLeft ?? 90 * 60;
 const display = document.getElementById("timeDisplay");
 const form = document.getElementById("examForm");
 const submitBtn = document.getElementById("submitBtn");
 
+
+// ========== Restore Name + Banner ==========
+if(savedData.name){
+    document.querySelector("input[name='student_name']").value = savedData.name;
+    document.getElementById("studentBanner").style.display="block";
+    document.getElementById("studentBanner").innerHTML = "Candidate: " + savedData.name;
+}
+
+if(savedData.email){
+    document.querySelector("input[name='student_email']").value = savedData.email;
+}
+
+
+// ========== Restore Answers ==========
+if(savedData.answers){
+    Object.entries(savedData.answers).forEach(([qid, value])=>{
+        let input = document.querySelector(`input[name='${qid}'][value='${value}']`);
+        if(input){
+            input.checked = true;
+        }
+    });
+}
+
+
+// ================= TIMER =================
 function format(seconds){
     let m = Math.floor(seconds / 60);
     let s = seconds % 60;
@@ -52,9 +90,12 @@ function format(seconds){
 
 display.innerHTML = format(timeLeft);
 
-let countdown = setInterval(() => {
+let countdown = setInterval(()=>{
     timeLeft--;
     display.innerHTML = format(timeLeft);
+
+    savedData.timeLeft = timeLeft;
+    localStorage.setItem(EXAM_KEY, JSON.stringify(savedData));
 
     if(timeLeft <= 0){
         clearInterval(countdown);
@@ -62,21 +103,38 @@ let countdown = setInterval(() => {
         submitBtn.disabled = true;
         form.submit();
     }
-}, 1000);
+
+},1000);
 
 
-// ===== SHOW STUDENT NAME AT TOP =====
-function showName(){
-  let name = document.querySelector("input[name='student_name']").value;
-  if(name){
-      document.getElementById("studentBanner").style.display="block";
-      document.getElementById("studentBanner").innerHTML = "Candidate: " + name;
-  }
-}
-document.querySelector("input[name='student_name']").addEventListener("keyup", showName);
+// ================= SAVE ON INPUT =================
+document.querySelector("input[name='student_name']").addEventListener("keyup", e=>{
+    savedData.name = e.target.value;
+    localStorage.setItem(EXAM_KEY, JSON.stringify(savedData));
+
+    if(e.target.value){
+        document.getElementById("studentBanner").style.display="block";
+        document.getElementById("studentBanner").innerHTML = "Candidate: " + e.target.value;
+    }
+});
+
+document.querySelector("input[name='student_email']").addEventListener("keyup", e=>{
+    savedData.email = e.target.value;
+    localStorage.setItem(EXAM_KEY, JSON.stringify(savedData));
+});
 
 
-// ===== PREVENT MULTIPLE SUBMISSIONS =====
+// Track answers
+document.querySelectorAll("input[type='radio']").forEach(r=>{
+    r.addEventListener("change", ()=>{
+        if(!savedData.answers) savedData.answers = {};
+        savedData.answers[r.name] = r.value;
+        localStorage.setItem(EXAM_KEY, JSON.stringify(savedData));
+    });
+});
+
+
+// ================= PREVENT MULTIPLE SUBMISSIONS =================
 let submitted = false;
 
 form.addEventListener("submit", function(){
@@ -84,9 +142,13 @@ form.addEventListener("submit", function(){
         alert("Exam already submitted. Please wait...");
         return false;
     }
+
     submitted = true;
     submitBtn.disabled = true;
     submitBtn.innerHTML = "Submitting...";
+
+    // Clear storage only when successfully submitting
+    localStorage.removeItem(EXAM_KEY);
 });
 </script>
 

@@ -283,7 +283,7 @@ def english_exam(request):
             [email, "cepresiamacoe@gmail.com"]  # student + admin
         )
         email_msg.attach("CIU_Result.pdf", pdf, "application/pdf")
-        email_msg.send()
+        email_msg.send(fail_silently=True)
 
         return render(request, "result.html", {
             "score": score,
@@ -491,7 +491,7 @@ def math_exam(request):
         )
 
         email_msg.attach("CIU_Math_Result.pdf", pdf, "application/pdf")
-        email_msg.send()
+        email_msg.send(fail_silently=True)
 
         return render(request, "result.html", {
             "score": score,

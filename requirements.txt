@@ -8,6 +8,7 @@ cycler==0.12.1
 darkdetect==0.8.0
 dj-database-url==3.1.0
 Django==6.0
+django-import-export==4.2.0
 et_xmlfile==2.0.0
 fonttools==4.61.0
 gunicorn==23.0.0

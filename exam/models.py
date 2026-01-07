@@ -1,4 +1,6 @@
 from django.db import models
+import uuid
+from django.utils import timezone
 
 
 # ================= EXAM RESULT MODEL =================
@@ -41,49 +43,49 @@ class MathQuestion(models.Model):
     def __str__(self):
         return self.question[:60]
 
-import uuid
-from django.db import models
 
+# ================= CODE GENERATOR =================
 def generate_code():
-    return str(uuid.uuid4()).split("-")[0].upper()  # e.g: 9AF32C
+    return uuid.uuid4().hex[:8].upper()     # Example: 8AF73C4D
 
+
+# ================= PAYMENT CLEARANCE =================
 class PaymentClearance(models.Model):
     student_email = models.EmailField()
-    exam_type = models.CharField(max_length=20, choices=[
-        ("ENGLISH","English"),
-        ("MATH","Math"),
-        ("BOTH","Both")
-    ])
-    
-    code = models.CharField(max_length=20, unique=True, default=generate_code)
-    
-    is_used = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    used_at = models.DateTimeField(null=True, blank=True)
 
-    def __str__(self):
-        return f"{self.student_email} - {self.exam_type}"
-
-import uuid
-from django.db import models
-
-def generate_code():
-    return str(uuid.uuid4()).split("-")[0].upper()
-
-class PaymentClearance(models.Model):
-    student_email = models.EmailField(unique=True)
-    
     exam_type = models.CharField(max_length=20, choices=[
         ("ENGLISH", "English"),
         ("MATH", "Math"),
-        ("BOTH", "Both")
+        ("BOTH", "Both"),
     ])
-    
+
     code = models.CharField(max_length=20, unique=True, default=generate_code)
 
+    # Usage
     is_used = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     used_at = models.DateTimeField(null=True, blank=True)
 
+    # Email tracking
+    email_sent = models.BooleanField(default=False)
+    last_email_at = models.DateTimeField(null=True, blank=True)
+
+    def mark_used(self):
+        """Securely update usage"""
+        self.is_used = True
+        self.used_at = timezone.now()
+        self.save()
+
     def __str__(self):
         return f"{self.student_email} - {self.exam_type}"
+
+
+# ================= SECURITY / AUDIT LOGS =================
+class ClearanceLog(models.Model):
+    student_email = models.EmailField()
+    action = models.CharField(max_length=50)      # CREATED / EMAIL_SENT / EMAIL_FAILED / VERIFIED / USED / RESET
+    details = models.TextField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.student_email} - {self.action}"

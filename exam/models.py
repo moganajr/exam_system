@@ -71,7 +71,7 @@ class PaymentClearance(models.Model):
     last_email_at = models.DateTimeField(null=True, blank=True)
 
     def mark_used(self):
-        """Securely update usage"""
+        """Securely mark clearance as used"""
         self.is_used = True
         self.used_at = timezone.now()
         self.save()
@@ -83,7 +83,8 @@ class PaymentClearance(models.Model):
 # ================= SECURITY / AUDIT LOGS =================
 class ClearanceLog(models.Model):
     student_email = models.EmailField()
-    action = models.CharField(max_length=50)      # CREATED / EMAIL_SENT / EMAIL_FAILED / VERIFIED / USED / RESET
+    action = models.CharField(max_length=50)  
+    # CREATED / EMAIL_SENT / EMAIL_FAILED / VERIFIED / USED / RESET
     details = models.TextField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
 

@@ -1,6 +1,9 @@
 from django.core.mail import send_mail
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
+from django.http import JsonResponse
+from django.contrib.admin.views.decorators import staff_member_required
+from django.http import JsonResponse
 from django.core.mail import EmailMessage
 from django.utils import timezone
 
@@ -208,10 +211,12 @@ questions = {
 import random
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
-from .models import EnglishQuestion, ExamResult
+from .models import EnglishQuestion, ExamResult, ExamSession
 from django.core.mail import EmailMessage
 from reportlab.pdfgen import canvas
 from io import BytesIO
+
+from django.conf import settings
 
 
 def english_exam(request):
@@ -262,6 +267,16 @@ def english_exam(request):
             status=status
         )
 
+        # Mark server-side exam session completed if present
+        email = request.session.get("verified_email")
+        if email:
+            try:
+                es = ExamSession.objects.filter(student_email=email, exam_type="ENGLISH", is_completed=False).first()
+                if es:
+                    es.mark_completed()
+            except Exception:
+                pass
+
         # ================= PDF CERTIFICATE =================
         buffer = BytesIO()
         p = canvas.Canvas(buffer)
@@ -293,6 +308,12 @@ def english_exam(request):
         except:
             pass
 
+        # Clear persisted question ids, option orders and start time for this exam from session
+        request.session.pop("english_question_ids", None)
+        request.session.pop("english_q_options_order", None)
+        request.session.pop("english_started_at", None)
+        request.session.modified = True
+
         return render(request, "result.html", {
             "score": score,
             "total": total,
@@ -303,21 +324,194 @@ def english_exam(request):
         })
 
     # ================= LOAD RANDOM QUESTIONS =================
-    all_questions = list(EnglishQuestion.objects.all())
-    random.shuffle(all_questions)
-    selected = all_questions[:35]
+    # Check for timeout (server-side if stored in DB)
+    email = request.session.get("verified_email")
+    if email:
+        try:
+            sess = ExamSession.objects.filter(student_email=email, exam_type="ENGLISH", is_completed=False).first()
+        except Exception:
+            sess = None
+        if sess:
+            elapsed = (timezone.now() - sess.started_at).total_seconds()
+            timeout = getattr(settings, "EXAM_TIMEOUT_SECONDS", 60 * 60)
+            if elapsed > timeout:
+                sess.delete()
+                # also clear any session-level keys
+                request.session.pop("english_question_ids", None)
+                request.session.pop("english_q_options_order", None)
+                request.session.pop("english_started_at", None)
+                request.session.modified = True
+                return render(request, "exam_expired.html", {"subject": "English"})
+    # Persist 35 random question IDs and a consistent option order per question in session
+    # If a server-side session exists, load from it; otherwise create one
+    if email:
+        sess = ExamSession.objects.filter(student_email=email, exam_type="ENGLISH", is_completed=False).first()
+    else:
+        sess = None
 
+    if sess:
+        selected_ids = sess.question_ids
+        q_options = sess.q_options_order
+        # mirror into request.session for compatibility
+        request.session["english_question_ids"] = selected_ids
+        request.session["english_q_options_order"] = q_options
+        request.session["english_started_at"] = sess.started_at.timestamp()
+        request.session.modified = True
+    else:
+        all_ids = list(EnglishQuestion.objects.values_list("id", flat=True))
+        count = min(35, len(all_ids))
+        selected_ids = random.sample(all_ids, count) if all_ids else []
+        q_options = {}
+        for qid in selected_ids:
+            q = EnglishQuestion.objects.get(id=qid)
+            letters = ["A", "B", "C", "D"]
+            random.shuffle(letters)
+            q_options[str(qid)] = letters
+        # persist server-side if we have an email
+        if email:
+            ExamSession.objects.create(
+                student_email=email,
+                exam_type="ENGLISH",
+                question_ids=selected_ids,
+                q_options_order=q_options,
+            )
+        request.session["english_question_ids"] = selected_ids
+        request.session["english_q_options_order"] = q_options
+        request.session["english_started_at"] = timezone.now().timestamp()
+        request.session.modified = True
+
+    selected_ids = request.session.get("english_question_ids", [])
+    questions = list(EnglishQuestion.objects.filter(id__in=selected_ids))
+    id_to_q = {q.id: q for q in questions}
+    selected = [id_to_q[qid] for qid in selected_ids if qid in id_to_q]
+
+    # Apply the consistent shuffled option order saved in session / DB
+    q_options_order = request.session.get("english_q_options_order", {})
     for q in selected:
-        options = [
-            ("A", q.option_a),
-            ("B", q.option_b),
-            ("C", q.option_c),
-            ("D", q.option_d),
-        ]
-        random.shuffle(options)
-        q.shuffled = options
+        order = q_options_order.get(str(q.id), ["A", "B", "C", "D"])
+        opts_map = {
+            "A": q.option_a,
+            "B": q.option_b,
+            "C": q.option_c,
+            "D": q.option_d,
+        }
+        q.shuffled = [(letter, opts_map[letter]) for letter in order]
 
     return render(request, "exam.html", {"questions": selected})
+
+
+def autosave_exam(request):
+    """Autosave endpoint to persist partial answers.
+
+    Expects JSON POST with: exam_type (ENGLISH|MATH), answers (dict), name, email, question_ids (optional), q_options_order (optional), timeLeft (optional)
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+
+    email = request.session.get("verified_email") or request.POST.get("student_email")
+    if not email:
+        return JsonResponse({"error": "Not authenticated/verified"}, status=403)
+
+    try:
+        data = request.body.decode("utf-8")
+        import json
+        payload = json.loads(data) if data else {}
+    except Exception:
+        payload = request.POST.dict()
+
+    exam_type = payload.get("exam_type") or request.POST.get("exam_type")
+    if not exam_type:
+        return JsonResponse({"error": "exam_type required"}, status=400)
+
+    answers = payload.get("answers") or {}
+    question_ids = payload.get("question_ids")
+    q_options = payload.get("q_options_order")
+
+    sess, created = ExamSession.objects.get_or_create(
+        student_email=email,
+        exam_type=exam_type,
+        defaults={
+            "question_ids": question_ids or [],
+            "q_options_order": q_options or {},
+        }
+    )
+
+    # Update fields
+    if question_ids:
+        sess.question_ids = question_ids
+    if q_options:
+        sess.q_options_order = q_options
+    if isinstance(answers, dict):
+        # merge answers
+        sess.answers.update(answers)
+    sess.save()
+
+    # mirror into request.session for compatibility
+    request.session[f"{exam_type.lower()}_question_ids"] = sess.question_ids
+    request.session[f"{exam_type.lower()}_q_options_order"] = sess.q_options_order
+    request.session.modified = True
+
+    return JsonResponse({"status": "ok"})
+
+
+def resume_session(request, token):
+    """Resume an ExamSession into the current request.session using a signed token.
+
+    Token is signed JSON: {"session_id": <id>} and validated with TimestampSigner and RESUME_LINK_EXPIRY_SECONDS.
+    """
+    from django.core import signing
+    try:
+        expiry = getattr(settings, "RESUME_LINK_EXPIRY_SECONDS", 3600)
+        data = signing.TimestampSigner().unsign(token, max_age=expiry)
+        import json
+        payload = json.loads(data)
+        sess_id = int(payload.get("session_id"))
+    except signing.BadSignature:
+        return HttpResponse("Invalid resume token", status=400)
+    except signing.SignatureExpired:
+        return HttpResponse("Resume link expired", status=400)
+    except Exception:
+        return HttpResponse("Invalid token payload", status=400)
+
+    try:
+        sess = ExamSession.objects.get(pk=sess_id, is_completed=False)
+    except ExamSession.DoesNotExist:
+        return HttpResponse("Session not found or already completed", status=404)
+
+    # Load into request.session
+    request.session["verified_email"] = sess.student_email
+    request.session["allowed_exam"] = sess.exam_type
+    request.session[f"{sess.exam_type.lower()}_question_ids"] = sess.question_ids
+    request.session[f"{sess.exam_type.lower()}_q_options_order"] = sess.q_options_order
+    request.session[f"{sess.exam_type.lower()}_started_at"] = sess.started_at.timestamp()
+    request.session.modified = True
+
+    # Redirect to the appropriate exam page
+    if sess.exam_type == "ENGLISH":
+        # Log resume usage
+        try:
+            from .models import ResumeLog
+            ResumeLog.objects.create(student_email=sess.student_email, action="USED", details=f"Resumed session {sess.id} via token")
+        except Exception:
+            pass
+        return redirect("english_exam")
+    else:
+        try:
+            from .models import ResumeLog
+            ResumeLog.objects.create(student_email=sess.student_email, action="USED", details=f"Resumed session {sess.id} via token")
+        except Exception:
+            pass
+        return redirect("math_exam")
+
+
+@staff_member_required
+def admin_active_sessions_count(request):
+    """Return JSON with counts of active (not completed) ExamSession rows."""
+    from .models import ExamSession
+    total = ExamSession.objects.filter(is_completed=False).count()
+    english = ExamSession.objects.filter(is_completed=False, exam_type='ENGLISH').count()
+    math = ExamSession.objects.filter(is_completed=False, exam_type='MATH').count()
+    return JsonResponse({"total": total, "english": english, "math": math})
 
 # ===================== MATHEMATICS (YOUR 30 QUESTIONS) =====================
 math_questions = {
@@ -505,6 +699,22 @@ def math_exam(request):
         except:
             pass
 
+        # Clear persisted question ids, option orders and start time for this exam from session
+        request.session.pop("math_question_ids", None)
+        request.session.pop("math_q_options_order", None)
+        request.session.pop("math_started_at", None)
+        request.session.modified = True
+
+        # Mark server-side exam session completed if present
+        email = request.session.get("verified_email")
+        if email:
+            try:
+                ms = ExamSession.objects.filter(student_email=email, exam_type="MATH", is_completed=False).first()
+                if ms:
+                    ms.mark_completed()
+            except Exception:
+                pass
+
         return render(request, "result.html", {
             "score": score,
             "total": total,
@@ -515,20 +725,72 @@ def math_exam(request):
         })
 
     # ================= SELECT RANDOM QUESTIONS =================
-    questions = list(MathQuestion.objects.all())
-    random.shuffle(questions)
-    selected = questions[:30]
+    # Select 30 random question IDs once per exam session and store in session
+    # Server-side session handling for Math (resume across devices)
+    email = request.session.get("verified_email")
+    if email:
+        sess = ExamSession.objects.filter(student_email=email, exam_type="MATH", is_completed=False).first()
+    else:
+        sess = None
+
+    if sess:
+        elapsed = (timezone.now() - sess.started_at).total_seconds()
+        timeout = getattr(settings, "EXAM_TIMEOUT_SECONDS", 60 * 60)
+        if elapsed > timeout:
+            sess.delete()
+            request.session.pop("math_question_ids", None)
+            request.session.pop("math_q_options_order", None)
+            request.session.pop("math_started_at", None)
+            request.session.modified = True
+            return render(request, "exam_expired.html", {"subject": "Math"})
+
+    if sess:
+        selected_ids = sess.question_ids
+        q_options = sess.q_options_order
+        request.session["math_question_ids"] = selected_ids
+        request.session["math_q_options_order"] = q_options
+        request.session["math_started_at"] = sess.started_at.timestamp()
+        request.session.modified = True
+    else:
+        all_ids = list(MathQuestion.objects.values_list("id", flat=True))
+        count = min(30, len(all_ids))
+        selected_ids = random.sample(all_ids, count) if all_ids else []
+        q_options = {}
+        for qid in selected_ids:
+            q = MathQuestion.objects.get(id=qid)
+            letters = ["A", "B", "C", "D"]
+            random.shuffle(letters)
+            q_options[str(qid)] = letters
+        if email:
+            ExamSession.objects.create(
+                student_email=email,
+                exam_type="MATH",
+                question_ids=selected_ids,
+                q_options_order=q_options,
+            )
+        request.session["math_question_ids"] = selected_ids
+        request.session["math_q_options_order"] = q_options
+        request.session["math_started_at"] = timezone.now().timestamp()
+        request.session.modified = True
+
+    selected_ids = request.session.get("math_question_ids", [])
+    questions = list(MathQuestion.objects.filter(id__in=selected_ids))
+    # Preserve the stored order
+    id_to_q = {q.id: q for q in questions}
+    selected = [id_to_q[qid] for qid in selected_ids if qid in id_to_q]
 
     # ================= SHUFFLE OPTIONS =================
+    # Apply the consistent shuffled option order saved in session
+    q_options_order = request.session.get("math_q_options_order", {})
     for q in selected:
-        options = [
-            ("A", q.option_a),
-            ("B", q.option_b),
-            ("C", q.option_c),
-            ("D", q.option_d),
-        ]
-        random.shuffle(options)
-        q.shuffled = options
+        order = q_options_order.get(str(q.id), ["A", "B", "C", "D"])
+        opts_map = {
+            "A": q.option_a,
+            "B": q.option_b,
+            "C": q.option_c,
+            "D": q.option_d,
+        }
+        q.shuffled = [(letter, opts_map[letter]) for letter in order]
 
     return render(request, "math_exam.html", {
         "questions": selected

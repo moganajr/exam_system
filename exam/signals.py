@@ -5,6 +5,8 @@ from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 
 from .models import PaymentClearance, ClearanceLog
+from django.contrib.auth.signals import user_logged_out
+from django.dispatch import receiver
 
 
 def send_clearance(instance):
@@ -63,3 +65,37 @@ def auto_email_clearance(sender, instance, created, **kwargs):
         )
 
         send_clearance(instance)
+
+
+# ================= CLEAR EXAM SESSION ON LOGOUT =================
+@receiver(user_logged_out)
+def clear_exam_session_on_logout(sender, request, user, **kwargs):
+    if not request:
+        return
+    # Remove any exam-related session keys to prevent reuse across logins
+    keys = [
+        "english_question_ids",
+        "english_q_options_order",
+        "english_started_at",
+        "math_question_ids",
+        "math_q_options_order",
+        "math_started_at",
+    ]
+    for k in keys:
+        try:
+            request.session.pop(k, None)
+        except Exception:
+            pass
+    request.session.modified = True
+    # Also remove any server-side ExamSession rows for this email
+    try:
+        from .models import ExamSession
+        if user and hasattr(user, 'email') and user.email:
+            ExamSession.objects.filter(student_email=user.email, is_completed=False).delete()
+        else:
+            # fallback: use session verified_email
+            email = request.session.get('verified_email')
+            if email:
+                ExamSession.objects.filter(student_email=email, is_completed=False).delete()
+    except Exception:
+        pass

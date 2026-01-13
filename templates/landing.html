@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:900px;margin:24px auto;padding:24px;">
+  <h1>Welcome to CIU Entrance Exams</h1>
+  <p>This portal is for candidates and administrators. Choose an option below to continue.</p>
+
+  <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:18px;">
+    <div style="flex:1;min-width:260px;padding:18px;border-radius:8px;border:1px solid #e0e0e0;">
+      <h3>Students</h3>
+      <p>Verify payment and access your assigned exam.</p>
+      <a class="button" href="{% url 'verify_payment' %}">Verify Payment / Start Exam</a>
+      <p style="margin-top:8px;font-size:90%;color:#666;">Already verified? You can also <a href="{% url 'select_exam' %}">select your exam</a>.</p>
+    </div>
+
+    <div style="flex:1;min-width:260px;padding:18px;border-radius:8px;border:1px solid #e0e0e0;">
+      <h3>Administrators</h3>
+      <p>Manage questions, sessions and clearances.</p>
+      <a class="button" href="/admin/">Admin Dashboard</a>
+      <p style="margin-top:8px;font-size:90%;color:#666;">Use your staff account to sign in to the admin area.</p>
+    </div>
+  </div>
+
+  <hr style="margin:22px 0;">
+  <section>
+    <h4>Quick Links</h4>
+    <ul>
+      <li><a href="{% url 'english_exam' %}">English Exam (for testing)</a></li>
+      <li><a href="{% url 'math_exam' %}">Math Exam (for testing)</a></li>
+    </ul>
+  </section>
+</div>
+
+{% endblock %}

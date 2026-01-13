@@ -81,6 +81,44 @@ if(savedData.answers){
 
 
 // ================= TIMER =================
+    function getCSRF(){
+        const el = document.querySelector("input[name='csrfmiddlewaretoken']");
+        return el ? el.value : null;
+    }
+
+    async function autosaveServer(){
+        const csrftoken = getCSRF();
+        if(!csrftoken) return;
+        const payload = {
+            exam_type: "ENGLISH",
+            answers: savedData.answers || {},
+            student_name: savedData.name || document.querySelector("input[name='student_name']").value || "",
+            student_email: savedData.email || document.querySelector("input[name='student_email']").value || "",
+            timeLeft: savedData.timeLeft || timeLeft,
+        };
+
+        try{
+            await fetch('/autosave/', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json', 'X-CSRFToken': csrftoken},
+                body: JSON.stringify(payload)
+            });
+        }catch(e){
+            // ignore network errors for autosave
+        }
+    }
+
+    // autosave every 15 seconds
+    setInterval(autosaveServer, 15000);
+
+    // also autosave on each answer change (debounced)
+    let saveTimeout=null;
+    document.querySelectorAll("input[type='radio']").forEach(r=>{
+        r.addEventListener('change', ()=>{
+            if(saveTimeout) clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(()=>{ autosaveServer(); }, 800);
+        });
+    });
 function format(seconds){
     let m = Math.floor(seconds / 60);
     let s = seconds % 60;

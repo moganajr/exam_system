@@ -10,4 +10,6 @@ urlpatterns = [
     path('select/', views.select_exam, name='select_exam'),
     path('english/', views.english_exam, name='english_exam'),
     path('math/', views.math_exam, name='math_exam'),
+    path('autosave/', views.autosave_exam, name='autosave_exam'),
+    path('resume/<str:token>/', views.resume_session, name='resume_session'),
 ]

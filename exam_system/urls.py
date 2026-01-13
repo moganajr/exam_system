@@ -1,12 +1,13 @@
 from django.contrib import admin
 from django.urls import path
-from django.shortcuts import redirect
+from django.views.generic import TemplateView
 from exam import views
 
 urlpatterns = [
-    path('', lambda request: redirect('verify_payment'), name='home'),
+    path('', TemplateView.as_view(template_name='landing.html'), name='landing'),
 
     path('admin/', admin.site.urls),
+    path('admin/active_sessions_count/', views.admin_active_sessions_count, name='admin_active_sessions_count'),
 
     path('verify-payment/', views.verify_payment, name='verify_payment'),
 

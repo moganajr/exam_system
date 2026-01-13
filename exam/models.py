@@ -90,3 +90,48 @@ class ClearanceLog(models.Model):
 
     def __str__(self):
         return f"{self.student_email} - {self.action}"
+
+
+# ===================== EXAM SESSION (PERSISTENT) =====================
+class ExamSession(models.Model):
+    student_email = models.EmailField()
+
+    exam_type = models.CharField(max_length=10, choices=[
+        ("ENGLISH", "English"),
+        ("MATH", "Math"),
+    ])
+
+    question_ids = models.JSONField(default=list)
+    q_options_order = models.JSONField(default=dict)
+    answers = models.JSONField(default=dict, blank=True)
+
+    started_at = models.DateTimeField(auto_now_add=True)
+    last_saved = models.DateTimeField(auto_now=True)
+
+    is_completed = models.BooleanField(default=False)
+
+    def mark_completed(self):
+        self.is_completed = True
+        self.save(update_fields=["is_completed", "last_saved"])
+
+    def __str__(self):
+        return f"{self.student_email} - {self.exam_type} - {'DONE' if self.is_completed else 'ACTIVE'}"
+
+
+# ===================== EXAM CONFIG (singleton-like) =====================
+class ExamConfig(models.Model):
+    resume_link_expiry_seconds = models.IntegerField(default=3600, help_text="Expiry for generated resume links in seconds")
+
+    def __str__(self):
+        return f"Exam Config"
+
+
+# ===================== RESUME AUDIT LOG =====================
+class ResumeLog(models.Model):
+    student_email = models.EmailField()
+    action = models.CharField(max_length=50)  # GENERATED / USED
+    details = models.TextField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.student_email} - {self.action}"

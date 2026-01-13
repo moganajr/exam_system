@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:800px;margin:20px auto;">
+  <h2>Clearance Detail</h2>
+  <dl>
+    <dt>Email</dt><dd>{{ c.student_email }}</dd>
+    <dt>Code</dt><dd>{{ c.code }}</dd>
+    <dt>Exam</dt><dd>{{ c.get_exam_type_display }}</dd>
+    <dt>Status</dt><dd>{{ c.status }}</dd>
+    <dt>Used At</dt><dd>{{ c.used_at }}</dd>
+    <dt>Created</dt><dd>{{ c.created_at }}</dd>
+  </dl>
+
+  <div>
+    <style>
+      .action-link { color:#1976d2; text-decoration:none; margin-right:12px }
+    </style>
+    {% if role == 'finance' %}
+      <a class="action-link confirm-action" data-action="approve" href="{% url 'clearance_approve' c.id %}">Approve</a>
+      <a class="action-link confirm-action" data-action="reject" href="{% url 'clearance_reject' c.id %}">Reject</a>
+      <a class="action-link confirm-action" data-action="mark-used" href="{% url 'clearance_mark_used' c.id %}">Mark Used</a>
+    {% endif %}
+    <a class="action-link" href="{% url 'clearance_dashboard' %}">Back</a>
+    <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      document.querySelectorAll('.confirm-action').forEach(function(a){
+        a.addEventListener('click', function(e){
+          var act = a.dataset.action || 'perform this action';
+          if(!confirm('Are you sure you want to ' + act + ' this clearance?')){ e.preventDefault(); }
+        });
+      });
+    });
+    </script>
+  </div>
+</div>
+{% endblock %}

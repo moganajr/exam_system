@@ -63,6 +63,7 @@ class PaymentClearance(models.Model):
 
     # Usage
     is_used = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, default='PENDING')
     created_at = models.DateTimeField(auto_now_add=True)
     used_at = models.DateTimeField(null=True, blank=True)
 
@@ -90,6 +91,17 @@ class ClearanceLog(models.Model):
 
     def __str__(self):
         return f"{self.student_email} - {self.action}"
+
+
+class ClearanceActionLog(models.Model):
+    user_email = models.CharField(max_length=255)
+    action = models.CharField(max_length=64)
+    payment_clearance = models.ForeignKey(PaymentClearance, on_delete=models.CASCADE)
+    details = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user_email} {self.action} {self.payment_clearance_id}"
 
 
 # ===================== EXAM SESSION (PERSISTENT) =====================

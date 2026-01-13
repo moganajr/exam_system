@@ -15,6 +15,10 @@ from .models import (
     MathQuestion,
     PaymentClearance,
 )
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.paginator import Paginator
+from django.http import HttpResponseRedirect, HttpResponse
+import csv
 
 
 def verify_payment(request):
@@ -40,6 +44,116 @@ def verify_payment(request):
         return redirect("select_exam")
 
     return render(request, "verify_payment.html")
+
+
+def _user_role(user):
+    if user.groups.filter(name='finance').exists():
+        return 'finance'
+    if user.groups.filter(name='qa').exists():
+        return 'qa'
+    if user.groups.filter(name='me').exists():
+        return 'me'
+    return 'staff'
+
+
+@login_required
+def clearance_dashboard(request):
+    role = _user_role(request.user)
+    qs = PaymentClearance.objects.all().order_by('-created_at')
+    q = request.GET.get('q')
+    status = request.GET.get('status')
+    if q:
+        qs = qs.filter(student_email__icontains=q) | qs.filter(code__icontains=q)
+    if status:
+        qs = qs.filter(status=status)
+
+    paginator = Paginator(qs, 20)
+    page = request.GET.get('page')
+    page_obj = paginator.get_page(page)
+    return render(request, 'clearance_dashboard.html', {'clearances': page_obj, 'role': role})
+
+
+@login_required
+def clearance_detail(request, pk):
+    role = _user_role(request.user)
+    c = PaymentClearance.objects.get(pk=pk)
+    return render(request, 'clearance_detail.html', {'c': c, 'role': role})
+
+
+def _require_finance(user):
+    return user.is_staff and user.groups.filter(name='finance').exists()
+
+
+@user_passes_test(_require_finance)
+def clearance_approve(request, pk):
+    c = PaymentClearance.objects.get(pk=pk)
+    c.status = 'APPROVED'
+    c.is_used = False
+    c.save()
+    # audit log
+    try:
+        from .models import ClearanceActionLog
+        ClearanceActionLog.objects.create(user_email=request.user.email or request.user.username, action='APPROVE', payment_clearance=c)
+    except Exception:
+        pass
+    return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
+
+
+@user_passes_test(_require_finance)
+def clearance_reject(request, pk):
+    c = PaymentClearance.objects.get(pk=pk)
+    c.status = 'REJECTED'
+    c.save()
+    try:
+        from .models import ClearanceActionLog
+        ClearanceActionLog.objects.create(user_email=request.user.email or request.user.username, action='REJECT', payment_clearance=c)
+    except Exception:
+        pass
+    return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
+
+
+@user_passes_test(_require_finance)
+def clearance_mark_used(request, pk):
+    c = PaymentClearance.objects.get(pk=pk)
+    c.status = 'USED'
+    c.is_used = True
+    c.used_at = timezone.now()
+    c.save()
+    try:
+        from .models import ClearanceActionLog
+        ClearanceActionLog.objects.create(user_email=request.user.email or request.user.username, action='MARK_USED', payment_clearance=c)
+    except Exception:
+        pass
+    return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
+
+
+@user_passes_test(lambda u: u.is_staff and u.groups.filter(name='qa').exists())
+def clearance_flag(request, pk):
+    c = PaymentClearance.objects.get(pk=pk)
+    # simple flag: set status to PENDING and add note field if exists
+    c.status = 'PENDING'
+    c.save()
+    try:
+        from .models import ClearanceActionLog
+        ClearanceActionLog.objects.create(user_email=request.user.email or request.user.username, action='FLAG', payment_clearance=c)
+    except Exception:
+        pass
+    return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
+
+
+@login_required
+def clearance_export(request):
+    if not (request.user.groups.filter(name='finance').exists() or request.user.groups.filter(name='me').exists()):
+        return HttpResponse('Forbidden', status=403)
+    qs = PaymentClearance.objects.all().order_by('-created_at')
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="payment_clearances.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['email','code','exam_type','status','used_at','created_at'])
+    for c in qs:
+        writer.writerow([c.student_email, c.code, c.exam_type, c.status, c.used_at, c.created_at])
+    return response
+
 
 # ===================== SUBJECT SELECTION =====================
 def select_exam(request):

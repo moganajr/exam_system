@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:1100px;margin:20px auto;">
+  <h2>Payment Clearance Dashboard</h2>
+  <p>Signed in as: {{ request.user.get_full_name|default:request.user.username }} ({{ role }})</p>
+
+  <form method="get" style="margin-bottom:12px;">
+    <input name="q" placeholder="search by email or code" value="{{ request.GET.q }}">
+    <select name="status">
+      <option value="">All</option>
+      <option value="PENDING" {% if request.GET.status=='PENDING' %}selected{% endif %}>Pending</option>
+      <option value="APPROVED" {% if request.GET.status=='APPROVED' %}selected{% endif %}>Approved</option>
+      <option value="REJECTED" {% if request.GET.status=='REJECTED' %}selected{% endif %}>Rejected</option>
+      <option value="USED" {% if request.GET.status=='USED' %}selected{% endif %}>Used</option>
+    </select>
+    <button>Filter</button>
+  </form>
+
+  <style>
+    .btn { display:inline-block;padding:6px 10px;border-radius:4px;background:#1976d2;color:#fff;text-decoration:none }
+    .btn-muted { background:#6c757d }
+    .action-link { color:#1976d2;text-decoration:none;margin-left:8px }
+    table th, table td { padding:8px 10px; }
+  </style>
+
+  <table style="width:100%;border-collapse:collapse;">
+    <thead>
+      <tr>
+        <th style="text-align:left">Email</th>
+        <th>Code</th>
+        <th>Exam</th>
+        <th>Status</th>
+        <th>Used At</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in clearances %}
+      <tr style="border-top:1px solid #eee;">
+        <td>{{ c.student_email }}</td>
+        <td>{{ c.code }}</td>
+        <td>{{ c.get_exam_type_display }}</td>
+        <td>{{ c.status }}</td>
+        <td>{{ c.used_at }}</td>
+        <td>
+          <a class="action-link" href="{% url 'clearance_detail' c.id %}">View</a>
+          {% if role == 'finance' %}
+            <a class="action-link confirm-action" data-action="approve" href="{% url 'clearance_approve' c.id %}">Approve</a>
+            <a class="action-link confirm-action" data-action="reject" href="{% url 'clearance_reject' c.id %}">Reject</a>
+            <a class="action-link confirm-action" data-action="mark-used" href="{% url 'clearance_mark_used' c.id %}">Mark Used</a>
+          {% endif %}
+          {% if role == 'qa' %}
+            <a class="action-link confirm-action" data-action="flag" href="{% url 'clearance_flag' c.id %}">Flag</a>
+          {% endif %}
+          {% if role == 'finance' or role == 'me' %}
+            <a class="action-link" href="{% url 'clearance_export' %}">Export CSV</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6">No records</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div style="margin-top:16px;">Total: {{ clearances.paginator.count }}</div>
+  <div>
+    {% if clearances.has_previous %}<a href="?page={{ clearances.previous_page_number }}">Prev</a>{% endif %}
+    {% if clearances.has_next %}<a href="?page={{ clearances.next_page_number }}">Next</a>{% endif %}
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('.confirm-action').forEach(function(a){
+    a.addEventListener('click', function(e){
+      var act = a.dataset.action || 'perform this action';
+      var ok = confirm('Are you sure you want to ' + act + ' this clearance?');
+      if(!ok){ e.preventDefault(); }
+    });
+  });
+});
+</script>
+{% endblock %}
